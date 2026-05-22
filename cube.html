@@ -1,0 +1,1545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
+<meta name="theme-color" content="#0a0a14" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<title>NeoCube — 3D Rubik's Simulator & Trainer</title>
+<style>
+  :root{
+    --bg-0:#06060d; --bg-1:#0e0e1c; --glass: rgba(20,22,40,.55);
+    --stroke: rgba(255,255,255,.10); --stroke-2: rgba(255,255,255,.18);
+    --txt:#eaf0ff; --txt-dim:#9aa3c7; --accent:#6ea8ff; --accent-2:#b388ff;
+    --good:#46e3a3; --warn:#ffb84d; --bad:#ff6b8a;
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bot: env(safe-area-inset-bottom, 0px);
+    --shadow: 0 10px 30px rgba(0,0,0,.45), 0 1px 0 rgba(255,255,255,.04) inset;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color: transparent; user-select:none;}
+  html,body{margin:0; padding:0; height:100%; overflow:hidden; background:
+    radial-gradient(1200px 800px at 10% -10%, #1a1740 0%, transparent 60%),
+    radial-gradient(900px 700px at 110% 110%, #0b2a4a 0%, transparent 55%),
+    linear-gradient(180deg, var(--bg-0), var(--bg-1));
+    color:var(--txt);
+    font: 14px/1.35 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", Roboto, system-ui, sans-serif;
+    overscroll-behavior:none; touch-action:none;
+  }
+  #app{position:fixed; inset:0;}
+  #scene{position:absolute; inset:0; touch-action:none;}
+  canvas{display:block;}
+
+  /* Top HUD */
+  .hud-top{
+    position:absolute; top:calc(10px + var(--safe-top)); left:10px; right:10px;
+    display:flex; gap:8px; align-items:center; justify-content:space-between;
+    pointer-events:none; z-index:5;
+  }
+  .pill{
+    pointer-events:auto;
+    background:var(--glass); backdrop-filter: blur(18px) saturate(140%);
+    -webkit-backdrop-filter: blur(18px) saturate(140%);
+    border:1px solid var(--stroke); border-radius:14px; padding:8px 12px;
+    box-shadow: var(--shadow);
+    display:flex; align-items:center; gap:8px;
+  }
+  .pill .k{color:var(--txt-dim); font-size:11px; letter-spacing:.04em; text-transform:uppercase;}
+  .pill .v{font-weight:600; font-variant-numeric: tabular-nums;}
+  .row{display:flex; gap:8px; align-items:center;}
+  .brand{
+    font-weight:700; letter-spacing:.02em;
+    background: linear-gradient(135deg, #cfe1ff, #b388ff 55%, #6ea8ff);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+  }
+
+  /* Bottom dock */
+  .dock{
+    position:absolute; left:10px; right:10px; bottom:calc(10px + var(--safe-bot));
+    display:flex; gap:8px; justify-content:center; flex-wrap:wrap;
+    z-index:5;
+  }
+  .btn{
+    pointer-events:auto;
+    background:var(--glass); backdrop-filter: blur(18px) saturate(140%);
+    -webkit-backdrop-filter: blur(18px) saturate(140%);
+    border:1px solid var(--stroke); color:var(--txt);
+    border-radius:14px; padding:11px 14px; font-weight:600; font-size:13px;
+    display:inline-flex; align-items:center; gap:8px; cursor:pointer;
+    box-shadow: var(--shadow); transition: transform .12s ease, border-color .2s ease, background .2s ease;
+    min-height:44px; min-width:44px; justify-content:center;
+  }
+  .btn:active{transform: scale(.96);}
+  .btn.primary{
+    background: linear-gradient(135deg, rgba(110,168,255,.35), rgba(179,136,255,.35));
+    border-color: rgba(179,136,255,.5);
+  }
+  .btn.ghost{background: rgba(255,255,255,.04);}
+  .btn .ic{width:18px; height:18px; display:inline-block;}
+  .btn.icon-only{padding:11px;}
+
+  /* Side fab column */
+  .fab-col{
+    position:absolute; right:10px; top:50%; transform: translateY(-50%);
+    display:flex; flex-direction:column; gap:8px; z-index:5;
+  }
+  .fab-col .btn{padding:10px;}
+
+  /* Sheet */
+  .sheet-backdrop{
+    position:absolute; inset:0; background:rgba(0,0,0,.45); opacity:0; pointer-events:none;
+    transition: opacity .25s ease; z-index:10;
+  }
+  .sheet-backdrop.open{opacity:1; pointer-events:auto;}
+  .sheet{
+    position:absolute; left:0; right:0; bottom:0; max-height:80vh;
+    transform: translateY(100%); transition: transform .35s cubic-bezier(.2,.8,.2,1);
+    background: linear-gradient(180deg, rgba(20,22,40,.85), rgba(12,12,24,.92));
+    backdrop-filter: blur(24px) saturate(140%); -webkit-backdrop-filter: blur(24px) saturate(140%);
+    border-top-left-radius:22px; border-top-right-radius:22px;
+    border-top:1px solid var(--stroke-2);
+    box-shadow: 0 -20px 60px rgba(0,0,0,.5);
+    z-index:11; padding: 10px 14px calc(18px + var(--safe-bot));
+    overflow:auto; -webkit-overflow-scrolling: touch;
+  }
+  .sheet.open{transform:translateY(0);}
+  .grab{width:42px; height:4px; border-radius:99px; background:rgba(255,255,255,.18); margin:6px auto 12px;}
+  .sheet h3{margin:6px 0 10px; font-size:15px; letter-spacing:.02em;}
+  .sheet h4{margin:14px 0 8px; font-size:12px; color:var(--txt-dim); text-transform:uppercase; letter-spacing:.08em;}
+  .tabs{display:flex; gap:6px; margin-bottom:10px; flex-wrap:wrap;}
+  .tab{
+    flex:1 1 auto; text-align:center; padding:10px 12px; border-radius:12px;
+    background:rgba(255,255,255,.04); border:1px solid var(--stroke);
+    font-weight:600; font-size:12px; cursor:pointer;
+  }
+  .tab.active{background: linear-gradient(135deg, rgba(110,168,255,.35), rgba(179,136,255,.35)); border-color: rgba(179,136,255,.5);}
+  .grid{display:grid; gap:8px;}
+  .grid.cols-2{grid-template-columns: 1fr 1fr;}
+  .grid.cols-3{grid-template-columns: repeat(3,1fr);}
+  .grid.cols-4{grid-template-columns: repeat(4,1fr);}
+  .opt{
+    padding:12px; border-radius:12px; background:rgba(255,255,255,.04);
+    border:1px solid var(--stroke); cursor:pointer; text-align:center; font-weight:600;
+  }
+  .opt.active{background: linear-gradient(135deg, rgba(110,168,255,.35), rgba(179,136,255,.35)); border-color: rgba(179,136,255,.5);}
+  .opt .sub{display:block; color:var(--txt-dim); font-weight:500; font-size:11px; margin-top:2px;}
+
+  .slider{display:flex; align-items:center; gap:10px;}
+  .slider input{flex:1;}
+  input[type=range]{ -webkit-appearance:none; appearance:none; height:4px; background: rgba(255,255,255,.12); border-radius:99px; outline:none;}
+  input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; width:18px; height:18px; border-radius:50%; background: linear-gradient(135deg,#cfe1ff,#b388ff); box-shadow:0 2px 8px rgba(179,136,255,.5); cursor:pointer;}
+  input[type=range]::-moz-range-thumb{ width:18px; height:18px; border:0; border-radius:50%; background: linear-gradient(135deg,#cfe1ff,#b388ff);}
+
+  .switch{display:flex; align-items:center; justify-content:space-between; padding:10px 12px; border-radius:12px; background:rgba(255,255,255,.04); border:1px solid var(--stroke);}
+  .toggle{ width:42px; height:24px; background:rgba(255,255,255,.12); border-radius:99px; position:relative; transition: background .2s;}
+  .toggle::after{content:""; position:absolute; top:2px; left:2px; width:20px; height:20px; border-radius:50%; background:#fff; transition: transform .2s;}
+  .toggle.on{background: linear-gradient(135deg,#6ea8ff,#b388ff);}
+  .toggle.on::after{transform: translateX(18px);}
+
+  .moves{
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size:12px;
+    background: rgba(0,0,0,.3); border:1px solid var(--stroke); border-radius:10px;
+    padding:10px; min-height: 70px; max-height: 130px; overflow:auto; white-space:pre-wrap; word-break:break-all;
+    color:#dfe7ff;
+  }
+  .palette{display:flex; gap:8px; flex-wrap:wrap; justify-content:center;}
+  .sw{ width:36px; height:36px; border-radius:10px; border:2px solid rgba(255,255,255,.15); cursor:pointer; box-shadow: inset 0 -6px 12px rgba(0,0,0,.25), 0 4px 10px rgba(0,0,0,.4);}
+  .sw.active{ outline: 2px solid #fff; outline-offset:2px;}
+  .hint{
+    position:absolute; left:50%; bottom: calc(78px + var(--safe-bot)); transform: translateX(-50%);
+    pointer-events:none; padding:8px 14px; background: var(--glass); border:1px solid var(--stroke);
+    border-radius:99px; font-size:12px; color:var(--txt); opacity:0; transition: opacity .25s ease;
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); max-width:90%;
+    text-align:center; z-index:6;
+  }
+  .hint.show{opacity:1;}
+
+  /* Toast */
+  .toast{
+    position:absolute; left:50%; top:calc(56px + var(--safe-top)); transform: translate(-50%, -8px);
+    padding:8px 14px; background: var(--glass); border:1px solid var(--stroke); border-radius:99px;
+    font-size:12px; opacity:0; pointer-events:none; transition: all .25s ease; z-index:20;
+  }
+  .toast.show{opacity:1; transform: translate(-50%, 0);}
+
+  /* Splash */
+  .splash{
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    background: radial-gradient(600px 400px at 50% 50%, rgba(179,136,255,.15), transparent 60%), #06060d;
+    z-index:50; transition: opacity .5s ease; flex-direction:column; gap:14px;
+  }
+  .splash.hide{opacity:0; pointer-events:none;}
+  .logo{font-size:28px; font-weight:800; letter-spacing:.02em;
+    background: linear-gradient(135deg, #cfe1ff, #b388ff 55%, #6ea8ff);
+    -webkit-background-clip:text; background-clip:text; color:transparent;}
+  .spinner{width:38px; height:38px; border-radius:50%; border:3px solid rgba(255,255,255,.15); border-top-color:#b388ff; animation: spin 1s linear infinite;}
+  @keyframes spin{to{transform: rotate(360deg);}}
+
+  /* Confetti */
+  .confetti{position:absolute; inset:0; pointer-events:none; z-index:30; overflow:hidden;}
+  .conf{position:absolute; width:8px; height:14px; top:-20px; border-radius:2px; opacity:.95;
+    animation: fall linear forwards;}
+  @keyframes fall{ to{ transform: translateY(110vh) rotate(720deg); opacity:.4;} }
+
+  /* Stats grid */
+  .stat{ padding:12px; background:rgba(255,255,255,.04); border:1px solid var(--stroke); border-radius:12px;}
+  .stat .lbl{font-size:11px; color:var(--txt-dim); text-transform:uppercase; letter-spacing:.06em;}
+  .stat .val{font-size:18px; font-weight:700; margin-top:4px; font-variant-numeric: tabular-nums;}
+
+  @media (min-width: 720px){
+    .dock{justify-content:center;}
+    .pill .k{font-size:12px;}
+    .sheet{ left:auto; right:14px; bottom:90px; width:380px; max-height:70vh; border-radius:18px; border:1px solid var(--stroke-2);}
+  }
+  @media (orientation: landscape) and (max-height: 520px){
+    .hud-top{top:8px;} .dock{bottom:8px;}
+  }
+
+  /* Lesson arrow */
+  .arrow{ position:absolute; pointer-events:none; z-index:4; color:#ffd66e; filter: drop-shadow(0 0 6px rgba(255,214,110,.6));}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="scene"></div>
+
+  <!-- Top HUD -->
+  <div class="hud-top">
+    <div class="row">
+      <div class="pill"><span class="brand">NeoCube</span></div>
+    </div>
+    <div class="row">
+      <div class="pill" id="pillTime"><span class="k">⏱</span><span class="v" id="timeVal">0.00</span></div>
+      <div class="pill" id="pillMoves"><span class="k">moves</span><span class="v" id="moveVal">0</span></div>
+      <div class="pill" id="pillTps"><span class="k">tps</span><span class="v" id="tpsVal">0.0</span></div>
+    </div>
+  </div>
+
+  <!-- Side FABs -->
+  <div class="fab-col">
+    <button class="btn icon-only" id="btnUndo" title="Undo">↶</button>
+    <button class="btn icon-only" id="btnRedo" title="Redo">↷</button>
+    <button class="btn icon-only" id="btnReset" title="Reset view">⟳</button>
+    <button class="btn icon-only" id="btnAuto" title="Auto-rotate">◯</button>
+  </div>
+
+  <!-- Hint banner -->
+  <div class="hint" id="hint"></div>
+  <div class="toast" id="toast"></div>
+
+  <!-- Bottom dock -->
+  <div class="dock">
+    <button class="btn primary" id="btnScramble">⤮ Scramble</button>
+    <button class="btn primary" id="btnSolve">✦ Solve</button>
+    <button class="btn" id="btnTrain">🎓 Train</button>
+    <button class="btn" id="btnPaint">🎨 Paint</button>
+    <button class="btn" id="btnSettings">⚙︎</button>
+  </div>
+
+  <!-- Sheets -->
+  <div class="sheet-backdrop" id="backdrop"></div>
+
+  <!-- Settings / Puzzle -->
+  <div class="sheet" id="sheetSettings">
+    <div class="grab"></div>
+    <div class="tabs">
+      <div class="tab active" data-tab="puzzle">Puzzle</div>
+      <div class="tab" data-tab="stats">Stats</div>
+      <div class="tab" data-tab="moves">Moves</div>
+      <div class="tab" data-tab="settings">Settings</div>
+    </div>
+
+    <div class="tab-pane" data-pane="puzzle">
+      <h4>Standard</h4>
+      <div class="grid cols-3" id="puzzleStd"></div>
+      <h4>Special <span style="color:var(--txt-dim); font-weight:500; text-transform:none;">(visual preview — full mechanics coming)</span></h4>
+      <div class="grid cols-3" id="puzzleSpec"></div>
+      <h4>Scramble difficulty</h4>
+      <div class="slider"><span style="font-size:11px;color:var(--txt-dim)">Easy</span>
+        <input type="range" min="8" max="40" value="20" id="scrambleLen" />
+        <span style="font-size:11px;color:var(--txt-dim)">Hard</span>
+        <span class="v" id="scrambleLenVal" style="min-width:24px;text-align:right">20</span>
+      </div>
+    </div>
+
+    <div class="tab-pane" data-pane="stats" hidden>
+      <div class="grid cols-2">
+        <div class="stat"><div class="lbl">Last Solve</div><div class="val" id="sLast">—</div></div>
+        <div class="stat"><div class="lbl">Best</div><div class="val" id="sBest">—</div></div>
+        <div class="stat"><div class="lbl">Ao5</div><div class="val" id="sAo5">—</div></div>
+        <div class="stat"><div class="lbl">Ao12</div><div class="val" id="sAo12">—</div></div>
+        <div class="stat"><div class="lbl">Total Solves</div><div class="val" id="sCount">0</div></div>
+        <div class="stat"><div class="lbl">Total Moves</div><div class="val" id="sMoves">0</div></div>
+      </div>
+      <h4>History</h4>
+      <div class="moves" id="histList">No solves yet. Scramble and solve to begin.</div>
+      <div class="grid cols-2" style="margin-top:10px;">
+        <button class="btn ghost" id="btnClearStats">Clear Stats</button>
+        <button class="btn ghost" id="btnReplay">▶ Replay last</button>
+      </div>
+    </div>
+
+    <div class="tab-pane" data-pane="moves" hidden>
+      <h4>Scramble</h4>
+      <div class="moves" id="scrambleText">—</div>
+      <h4>Move history</h4>
+      <div class="moves" id="historyText">—</div>
+      <h4>Quick moves (3x3)</h4>
+      <div class="grid cols-4" id="quickMoves"></div>
+    </div>
+
+    <div class="tab-pane" data-pane="settings" hidden>
+      <h4>Animation speed</h4>
+      <div class="slider">
+        <span style="font-size:11px;color:var(--txt-dim)">Slow</span>
+        <input type="range" min="60" max="500" value="220" id="animSpeed" />
+        <span style="font-size:11px;color:var(--txt-dim)">Fast</span>
+      </div>
+      <h4>Solve playback speed</h4>
+      <div class="slider">
+        <span style="font-size:11px;color:var(--txt-dim)">0.5x</span>
+        <input type="range" min="50" max="200" value="100" id="solveSpeed" />
+        <span style="font-size:11px;color:var(--txt-dim)">2x</span>
+      </div>
+      <h4>Toggles</h4>
+      <div class="grid cols-2">
+        <div class="switch"><span>Haptics</span><div class="toggle on" id="tgHaptic"></div></div>
+        <div class="switch"><span>Sound</span><div class="toggle on" id="tgSound"></div></div>
+        <div class="switch"><span>Shadows</span><div class="toggle on" id="tgShadow"></div></div>
+        <div class="switch"><span>Battery saver</span><div class="toggle" id="tgBattery"></div></div>
+      </div>
+      <h4>State</h4>
+      <div class="grid cols-2">
+        <button class="btn ghost" id="btnSaveState">💾 Save state</button>
+        <button class="btn ghost" id="btnLoadState">⤓ Load state</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Paint sheet -->
+  <div class="sheet" id="sheetPaint">
+    <div class="grab"></div>
+    <h3>Sticker Paint</h3>
+    <div style="color:var(--txt-dim); font-size:12px; margin-bottom:10px;">Tap a sticker on the cube to paint it. Validation runs when you close this panel.</div>
+    <div class="palette" id="palette"></div>
+    <div class="grid cols-3" style="margin-top:12px;">
+      <button class="btn ghost" id="btnPaintUndo">Undo paint</button>
+      <button class="btn ghost" id="btnPaintReset">Reset colors</button>
+      <button class="btn primary" id="btnPaintDone">Done</button>
+    </div>
+    <div id="paintStatus" style="margin-top:10px; font-size:12px; color:var(--txt-dim);"></div>
+  </div>
+
+  <!-- Trainer sheet -->
+  <div class="sheet" id="sheetTrain">
+    <div class="grab"></div>
+    <h3>Beginner Trainer</h3>
+    <div style="color:var(--txt-dim); font-size:12px;">Layer-by-layer guided lessons. We'll scramble and walk you through each phase with explanations and animated moves.</div>
+    <h4>Lessons</h4>
+    <div class="grid" id="lessonList"></div>
+    <h4>Algorithm Library</h4>
+    <div class="grid" id="algoList"></div>
+  </div>
+
+  <!-- Splash -->
+  <div class="splash" id="splash">
+    <div class="logo">NeoCube</div>
+    <div class="spinner"></div>
+    <div style="color:var(--txt-dim); font-size:12px;">Polishing the stickers…</div>
+  </div>
+
+  <div class="confetti" id="confetti"></div>
+</div>
+
+<!-- THREE.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+/* =========================================================
+   NeoCube — Single-file 3D Rubik's simulator & trainer
+   Engine: arbitrary NxN cube on Three.js. Faithful mechanics,
+   touch gestures, scramble, reverse-scramble solver (deterministic),
+   stats, replay, paint mode, trainer, glass UI.
+========================================================= */
+(() => {
+'use strict';
+
+// ---------- Utilities ----------
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
+const lerp = (a,b,t)=>a+(b-a)*t;
+const easeOutCubic = t => 1 - Math.pow(1-t,3);
+const easeInOutCubic = t => t<.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2,3)/2;
+const fmtTime = ms => {
+  if(ms==null||!isFinite(ms)) return '—';
+  const s = ms/1000;
+  if(s<60) return s.toFixed(2)+'s';
+  const m = Math.floor(s/60), r = (s%60).toFixed(2).padStart(5,'0');
+  return `${m}:${r}`;
+};
+const haptic = (ms=10) => { if(state.haptics && navigator.vibrate) navigator.vibrate(ms); };
+
+// ---------- Audio ----------
+const audio = (() => {
+  let ctx = null;
+  const ensure = () => { if(!ctx) try{ ctx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} return ctx; };
+  return {
+    click(freq=380, dur=.05, type='triangle', gain=0.05){
+      if(!state.sound) return;
+      const c = ensure(); if(!c) return;
+      const o = c.createOscillator(), g = c.createGain();
+      o.type = type; o.frequency.value = freq;
+      g.gain.value = gain;
+      o.connect(g); g.connect(c.destination);
+      const t = c.currentTime;
+      g.gain.setValueAtTime(gain, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
+      o.start(t); o.stop(t+dur+.02);
+    },
+    win(){
+      if(!state.sound) return;
+      [523, 659, 784, 1046].forEach((f,i)=> setTimeout(()=>this.click(f,.18,'sine',.06), i*90));
+    }
+  };
+})();
+
+// ---------- App State ----------
+const state = {
+  N: 3,
+  haptics: true, sound: true, shadows: true, battery: false,
+  scrambleLen: 20,
+  animMs: 220, solveSpeedPct: 100,
+  paintMode: false, paintColor: 0,
+  autoRotate: false,
+  isSolving: false,
+  lastScrambleMoves: [],   // moves used to scramble (for reverse solve)
+  history: [],             // performed moves stack
+  redo: [],
+  stats: loadStats(),
+  startTime: null,         // solve timer start
+  timerRunning: false,
+  scrambled: false,
+  movesSinceScramble: 0,
+};
+
+function loadStats(){
+  try { return JSON.parse(localStorage.getItem('neocube_stats')||'null') || defaultStats(); }
+  catch(e){ return defaultStats(); }
+}
+function defaultStats(){ return { solves: [], totalMoves:0 }; }
+function saveStats(){ try{ localStorage.setItem('neocube_stats', JSON.stringify(state.stats)); }catch(e){} }
+
+// ---------- Three.js setup ----------
+const sceneEl = $('#scene');
+const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true, powerPreference:'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputEncoding = THREE.sRGBEncoding;
+sceneEl.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = null;
+
+const camera = new THREE.PerspectiveCamera(38, window.innerWidth/window.innerHeight, 0.1, 200);
+const cameraRig = { dist: 9, yaw: -0.6, pitch: 0.55, targetYaw:-0.6, targetPitch:0.55, targetDist:9 };
+function updateCamera(){
+  const x = cameraRig.dist * Math.cos(cameraRig.pitch) * Math.sin(cameraRig.yaw);
+  const y = cameraRig.dist * Math.sin(cameraRig.pitch);
+  const z = cameraRig.dist * Math.cos(cameraRig.pitch) * Math.cos(cameraRig.yaw);
+  camera.position.set(x,y,z);
+  camera.lookAt(0,0,0);
+}
+updateCamera();
+
+// Lighting
+const ambient = new THREE.AmbientLight(0xffffff, 0.55);
+scene.add(ambient);
+const hemi = new THREE.HemisphereLight(0xbcd4ff, 0x1a1530, 0.45);
+scene.add(hemi);
+const key = new THREE.DirectionalLight(0xffffff, 0.95);
+key.position.set(6, 10, 7); key.castShadow = true;
+key.shadow.mapSize.set(1024,1024);
+key.shadow.camera.near = 1; key.shadow.camera.far = 30;
+key.shadow.camera.left = -8; key.shadow.camera.right = 8;
+key.shadow.camera.top = 8; key.shadow.camera.bottom = -8;
+key.shadow.radius = 4;
+scene.add(key);
+const rim = new THREE.DirectionalLight(0xb388ff, 0.5);
+rim.position.set(-7, 4, -5);
+scene.add(rim);
+
+// Ground shadow plane
+const shadowMat = new THREE.ShadowMaterial({ opacity: 0.35 });
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(40,40), shadowMat);
+ground.rotation.x = -Math.PI/2; ground.position.y = -3.2; ground.receiveShadow = true;
+scene.add(ground);
+
+// Subtle starfield-ish background particles
+const bgPoints = (() => {
+  const g = new THREE.BufferGeometry();
+  const n = 220, pos = new Float32Array(n*3);
+  for(let i=0;i<n;i++){
+    const r = 30 + Math.random()*30;
+    const th = Math.random()*Math.PI*2;
+    const ph = (Math.random()-0.5)*Math.PI;
+    pos[i*3] = r*Math.cos(ph)*Math.cos(th);
+    pos[i*3+1] = r*Math.sin(ph);
+    pos[i*3+2] = r*Math.cos(ph)*Math.sin(th);
+  }
+  g.setAttribute('position', new THREE.BufferAttribute(pos,3));
+  const m = new THREE.PointsMaterial({ color:0x8fa6ff, size:0.08, transparent:true, opacity:.5 });
+  return new THREE.Points(g,m);
+})();
+scene.add(bgPoints);
+
+// ---------- Cube Model ----------
+/* Cubie axis convention:
+   x: right (+), left (-)
+   y: up (+), down (-)
+   z: front (+), back (-)
+   Face moves: U,D,L,R,F,B with axis & layer
+*/
+const FACE_COLORS = {
+  U: 0xffffff, // white  (up)
+  D: 0xffd000, // yellow (down) - we will use yellow on top for visual? we'll keep standard: U white, D yellow
+  L: 0xff8c1a, // orange (left)
+  R: 0xe6322a, // red    (right)
+  F: 0x1ea64d, // green  (front)
+  B: 0x1f6fe5, // blue   (back)
+  X: 0x0a0a0f  // inside / hidden plastic
+};
+const FACE_NAMES = ['U','D','L','R','F','B'];
+
+const cubeGroup = new THREE.Group();
+scene.add(cubeGroup);
+
+let cubies = [];        // list of {mesh, stickers:{U?,D?,L?,R?,F?,B?}}
+let stickerList = [];   // flat list of all sticker meshes for raycasting
+
+function disposeCube(){
+  cubeGroup.clear();
+  cubies = []; stickerList = [];
+}
+
+// Rounded box geometry (approximate via ExtrudeGeometry-free approach using BoxGeometry + scale; we'll fake with simple box and a slightly inset sticker)
+function makeCubieMesh(size){
+  const g = new THREE.BoxGeometry(size, size, size);
+  const m = new THREE.MeshStandardMaterial({ color: 0x0a0a0f, roughness: 0.55, metalness: 0.05 });
+  const mesh = new THREE.Mesh(g, m);
+  mesh.castShadow = true; mesh.receiveShadow = true;
+  return mesh;
+}
+function makeStickerMesh(face, size, color){
+  const s = size * 0.86;
+  const g = new THREE.PlaneGeometry(s, s, 1, 1);
+  const m = new THREE.MeshStandardMaterial({
+    color, roughness: 0.35, metalness: 0.0,
+    emissive: 0x000000,
+  });
+  const mesh = new THREE.Mesh(g, m);
+  mesh.castShadow = false; mesh.receiveShadow = false;
+  // position & orient based on face
+  const half = size/2 + 0.001;
+  switch(face){
+    case 'U': mesh.position.y =  half; mesh.rotation.x = -Math.PI/2; break;
+    case 'D': mesh.position.y = -half; mesh.rotation.x =  Math.PI/2; break;
+    case 'L': mesh.position.x = -half; mesh.rotation.y = -Math.PI/2; break;
+    case 'R': mesh.position.x =  half; mesh.rotation.y =  Math.PI/2; break;
+    case 'F': mesh.position.z =  half; break;
+    case 'B': mesh.position.z = -half; mesh.rotation.y =  Math.PI; break;
+  }
+  mesh.userData.face = face;
+  mesh.userData.colorIndex = colorIndexOf(color);
+  return mesh;
+}
+function colorIndexOf(hex){
+  const order = [FACE_COLORS.U, FACE_COLORS.D, FACE_COLORS.L, FACE_COLORS.R, FACE_COLORS.F, FACE_COLORS.B];
+  return order.indexOf(hex);
+}
+const PALETTE = [FACE_COLORS.U, FACE_COLORS.D, FACE_COLORS.L, FACE_COLORS.R, FACE_COLORS.F, FACE_COLORS.B];
+
+function buildCube(N){
+  disposeCube();
+  state.N = N;
+  const total = 2.6;       // logical cube extent
+  const size = total / N;  // each cubie size
+  const offset = (N-1)/2;
+  for(let xi=0; xi<N; xi++){
+    for(let yi=0; yi<N; yi++){
+      for(let zi=0; zi<N; zi++){
+        // skip internal cubies
+        if(xi>0 && xi<N-1 && yi>0 && yi<N-1 && zi>0 && zi<N-1) continue;
+        const cubie = makeCubieMesh(size);
+        cubie.position.set((xi-offset)*size, (yi-offset)*size, (zi-offset)*size);
+        cubie.userData.idx = {xi,yi,zi};
+        const stickers = {};
+        if(xi===N-1){ const s = makeStickerMesh('R', size, FACE_COLORS.R); cubie.add(s); stickers.R=s; stickerList.push(s); }
+        if(xi===0)  { const s = makeStickerMesh('L', size, FACE_COLORS.L); cubie.add(s); stickers.L=s; stickerList.push(s); }
+        if(yi===N-1){ const s = makeStickerMesh('U', size, FACE_COLORS.U); cubie.add(s); stickers.U=s; stickerList.push(s); }
+        if(yi===0)  { const s = makeStickerMesh('D', size, FACE_COLORS.D); cubie.add(s); stickers.D=s; stickerList.push(s); }
+        if(zi===N-1){ const s = makeStickerMesh('F', size, FACE_COLORS.F); cubie.add(s); stickers.F=s; stickerList.push(s); }
+        if(zi===0)  { const s = makeStickerMesh('B', size, FACE_COLORS.B); cubie.add(s); stickers.B=s; stickerList.push(s); }
+        cubie.userData.stickers = stickers;
+        cubeGroup.add(cubie);
+        cubies.push(cubie);
+      }
+    }
+  }
+  // adjust camera distance to fit
+  cameraRig.targetDist = N <= 3 ? 8.5 : (N<=4 ? 9.5 : (N<=5 ? 10.5 : 12));
+}
+
+// ---------- Move System ----------
+/* Move object: { face: 'U'|'D'|'L'|'R'|'F'|'B', layer: 0..N-1 (from that face), dir: +1 (CW from outside) or -1, double:false }
+   Notation: U, U', U2, with wide moves Uw or 2U for thicker, and slice notation Mw could be added.
+   For NxN we expose simple thin-layer + wide forms.
+*/
+const FACE_AXIS = {
+  U: {axis:'y', sign:+1},
+  D: {axis:'y', sign:-1},
+  R: {axis:'x', sign:+1},
+  L: {axis:'x', sign:-1},
+  F: {axis:'z', sign:+1},
+  B: {axis:'z', sign:-1},
+};
+
+function getLayerCubies(face, layer){
+  const N = state.N;
+  const {axis, sign} = FACE_AXIS[face];
+  // layer index from outside of that face: 0=face slice, ... N-1=opposite face slice
+  // Map to cubie coord index
+  let coordIdx; // index along axis 0..N-1 (0=negative side)
+  if(sign>0) coordIdx = N-1-layer;
+  else coordIdx = layer;
+  const key = axis==='x' ? 'xi' : axis==='y' ? 'yi' : 'zi';
+  return cubies.filter(c => c.userData.idx[key] === coordIdx);
+}
+
+let animQueue = [];
+let currentAnim = null;
+
+function queueMove(m, opts={}){
+  animQueue.push({move:m, opts});
+  if(!currentAnim) startNextAnim();
+}
+function startNextAnim(){
+  const item = animQueue.shift();
+  if(!item){ currentAnim=null; return; }
+  currentAnim = item;
+  performMoveAnim(item.move, item.opts);
+}
+
+function performMoveAnim(move, opts){
+  const {face, layer=0, dir=1, double=false, wide=1} = move;
+  const N = state.N;
+  // Build layer set: layers from `layer` (outer) through layer+wide-1
+  const set = new Set();
+  for(let l=layer; l<layer+wide; l++){
+    if(l<0||l>=N) continue;
+    getLayerCubies(face, l).forEach(c => set.add(c));
+  }
+  const targets = Array.from(set);
+  if(!targets.length){ finalizeMove(move); return; }
+
+  const pivot = new THREE.Group();
+  cubeGroup.add(pivot);
+  targets.forEach(c => pivot.attach(c));
+
+  const {axis, sign} = FACE_AXIS[face];
+  const angle = (double ? Math.PI : Math.PI/2) * dir * sign * (-1);
+  // Note: rotating CW when viewed from face's outward direction means rotation around axis * sign by -90° in three coords for x,y; for clarity we test.
+  // Empirically: U cw seen from +Y is -90° about Y. So angle = -π/2 about y for U cw. With sign=+1 dir=+1 double=false: -π/2 ✓.
+  const dur = (double ? state.animMs*1.4 : state.animMs) * (opts.speedMul||1);
+  const start = performance.now();
+
+  function step(now){
+    const t = clamp((now - start)/dur, 0, 1);
+    const e = easeInOutCubic(t);
+    const a = angle * e;
+    if(axis==='x') pivot.rotation.x = a;
+    else if(axis==='y') pivot.rotation.y = a;
+    else pivot.rotation.z = a;
+    if(t<1){ animFrameMove = requestAnimationFrame(step); }
+    else {
+      // Re-parent and snap
+      pivot.updateMatrixWorld(true);
+      targets.forEach(c => {
+        cubeGroup.attach(c);
+        snapCubie(c);
+      });
+      cubeGroup.remove(pivot);
+      finalizeMove(move, opts);
+      currentAnim = null;
+      startNextAnim();
+    }
+  }
+  let animFrameMove = requestAnimationFrame(step);
+  // tactile
+  if(!opts.silent){ haptic(8); audio.click(420 + Math.random()*40, .04, 'triangle', .04); }
+}
+
+function snapCubie(cubie){
+  // snap position to grid, rotation to nearest 90°
+  const N = state.N;
+  const size = 2.6 / N;
+  cubie.position.x = Math.round(cubie.position.x / size) * size;
+  cubie.position.y = Math.round(cubie.position.y / size) * size;
+  cubie.position.z = Math.round(cubie.position.z / size) * size;
+  const e = cubie.rotation;
+  const snap = a => Math.round(a / (Math.PI/2)) * (Math.PI/2);
+  // Use quaternion snap via matrix to avoid Euler gimbal issues
+  const q = cubie.quaternion.clone();
+  // sample 24 cube rotations and pick closest
+  const closest = nearestCubeRotation(q);
+  cubie.quaternion.copy(closest);
+  // update idx based on position
+  const offset = (N-1)/2;
+  cubie.userData.idx = {
+    xi: Math.round(cubie.position.x/size + offset),
+    yi: Math.round(cubie.position.y/size + offset),
+    zi: Math.round(cubie.position.z/size + offset),
+  };
+}
+
+// Precompute 24 cube rotations as quaternions
+const CUBE_ROTATIONS = (() => {
+  const list = [];
+  const axes = [
+    new THREE.Vector3(1,0,0), new THREE.Vector3(0,1,0), new THREE.Vector3(0,0,1),
+    new THREE.Vector3(-1,0,0), new THREE.Vector3(0,-1,0), new THREE.Vector3(0,0,-1)
+  ];
+  // generate by sampling many compositions
+  const seeds = [];
+  for(let i=0;i<3;i++){
+    for(let j=0;j<4;j++){
+      for(let k=0;k<4;k++){
+        const q = new THREE.Quaternion();
+        q.setFromAxisAngle(new THREE.Vector3(1,0,0), j*Math.PI/2);
+        const q2 = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0), k*Math.PI/2);
+        const q3 = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,0,1), i*Math.PI/2);
+        q.multiply(q2).multiply(q3);
+        seeds.push(q);
+      }
+    }
+  }
+  // dedupe by rounded matrix
+  const seen = new Set();
+  for(const q of seeds){
+    const m = new THREE.Matrix4().makeRotationFromQuaternion(q);
+    const key = m.elements.map(v=>Math.round(v)).join(',');
+    if(!seen.has(key)){ seen.add(key); list.push(q); }
+  }
+  return list;
+})();
+function nearestCubeRotation(q){
+  let best = CUBE_ROTATIONS[0], bestDot = -Infinity;
+  for(const r of CUBE_ROTATIONS){
+    const d = Math.abs(q.dot(r));
+    if(d > bestDot){ bestDot = d; best = r; }
+  }
+  return best.clone();
+}
+
+function finalizeMove(move, opts={}){
+  if(opts.recordHistory !== false){
+    state.history.push(move);
+    state.redo.length = 0;
+    state.movesSinceScramble++;
+    updateMoveUI();
+    if(state.scrambled && !state.timerRunning){
+      state.startTime = performance.now();
+      state.timerRunning = true;
+    }
+    if(state.scrambled && isSolved()){
+      onSolved();
+    }
+  }
+}
+
+// ---------- Solve detection ----------
+function isSolved(){
+  // each face's stickers should all share color (in world space they should all face same direction with same color)
+  // Group stickers by world-facing direction
+  cubeGroup.updateMatrixWorld(true);
+  const buckets = {U:[],D:[],L:[],R:[],F:[],B:[]};
+  const tmp = new THREE.Vector3();
+  for(const s of stickerList){
+    s.getWorldDirection(tmp);
+    const face = dirToFace(tmp);
+    if(!face) return false;
+    buckets[face].push(s.userData.colorIndex);
+  }
+  for(const f of FACE_NAMES){
+    const arr = buckets[f];
+    if(!arr.length) continue;
+    const first = arr[0];
+    for(const c of arr) if(c !== first) return false;
+  }
+  return true;
+}
+function dirToFace(v){
+  const ax = Math.abs(v.x), ay = Math.abs(v.y), az = Math.abs(v.z);
+  if(ax>ay && ax>az) return v.x>0?'R':'L';
+  if(ay>ax && ay>az) return v.y>0?'U':'D';
+  if(az>ax && az>ay) return v.z>0?'F':'B';
+  return null;
+}
+
+// ---------- Scramble & Solve ----------
+const MOVE_FACES = ['U','D','L','R','F','B'];
+function randomScramble(len){
+  const seq = [];
+  let lastFace = null, lastAxis = null;
+  for(let i=0;i<len;i++){
+    let f;
+    do { f = MOVE_FACES[Math.floor(Math.random()*MOVE_FACES.length)]; }
+    while(f===lastFace || (lastAxis && FACE_AXIS[f].axis===lastAxis && f!==lastFace ? false : false));
+    // avoid same face twice in a row
+    if(f===lastFace){ i--; continue; }
+    const dir = Math.random()<.5?1:-1;
+    const double = Math.random()<.18;
+    seq.push({face:f, layer:0, wide:1, dir, double});
+    lastFace = f; lastAxis = FACE_AXIS[f].axis;
+  }
+  return seq;
+}
+function inverseMove(m){
+  if(m.double) return {...m};
+  return {...m, dir: -m.dir};
+}
+function inverseSequence(seq){
+  return seq.slice().reverse().map(inverseMove);
+}
+function moveToNotation(m){
+  let s = m.face;
+  if(m.double) s += '2';
+  else if(m.dir===-1) s += "'";
+  return s;
+}
+function notationToMove(tok){
+  const f = tok[0];
+  if(!FACE_AXIS[f]) return null;
+  let dir = 1, double=false;
+  if(tok.endsWith('2')) double = true;
+  else if(tok.endsWith("'")) dir = -1;
+  return {face:f, layer:0, wide:1, dir, double};
+}
+function seqToString(seq){ return seq.map(moveToNotation).join(' '); }
+
+function doScramble(){
+  if(state.isSolving) return;
+  // reset to solved first to keep reverse-solve reliable
+  resetCube(false);
+  const seq = randomScramble(state.scrambleLen);
+  state.lastScrambleMoves = seq.slice();
+  state.history.length = 0; state.redo.length = 0;
+  state.scrambled = true;
+  state.timerRunning = false; state.startTime = null;
+  state.movesSinceScramble = 0;
+  $('#scrambleText').textContent = seqToString(seq);
+  // animate scramble fast
+  const speedMul = 0.5;
+  seq.forEach(m => queueMove(m, {speedMul, recordHistory:false, silent:true}));
+  toast('Scrambled — solve when ready');
+  updateMoveUI();
+}
+
+function doSolve(){
+  if(state.isSolving) return;
+  if(!state.scrambled){ toast('Scramble first to enable solver'); return; }
+  state.isSolving = true;
+  showHint('Solving…');
+  // Reliable solver: invert the (scramble + user moves). If user made moves, invert those first, then invert scramble.
+  // history holds all moves applied AFTER scramble in order; current state = solved -> scramble -> history
+  // To solve: apply inverse(history) then inverse(scramble)
+  const seq = inverseSequence(state.history).concat(inverseSequence(state.lastScrambleMoves));
+  const speedMul = 100 / state.solveSpeedPct;
+  // play
+  let i=0;
+  const playNext = () => {
+    if(i>=seq.length){
+      state.isSolving = false;
+      hideHint();
+      return;
+    }
+    const m = seq[i++];
+    queueMove(m, {speedMul, recordHistory:false, silent:false});
+    // schedule next after this move completes
+    const dur = (m.double?state.animMs*1.4:state.animMs)*speedMul + 10;
+    setTimeout(playNext, dur);
+  };
+  playNext();
+  // mark cube as un-scrambled at end visually:
+  setTimeout(()=>{
+    state.scrambled = false;
+    state.timerRunning = false;
+    state.history.length = 0; state.redo.length = 0;
+    updateMoveUI();
+    toast('Solved by NeoCube');
+  }, (state.animMs*speedMul) * seq.length + 100);
+}
+
+function resetCube(rebuild=true){
+  animQueue.length = 0; currentAnim = null;
+  if(rebuild) buildCube(state.N);
+  state.history.length = 0; state.redo.length = 0;
+  state.lastScrambleMoves = [];
+  state.scrambled = false; state.timerRunning = false; state.startTime = null;
+  state.movesSinceScramble = 0;
+  updateMoveUI();
+}
+
+// ---------- Solved celebration ----------
+function onSolved(){
+  state.timerRunning = false;
+  const elapsed = state.startTime ? performance.now() - state.startTime : 0;
+  state.stats.solves.push({ms: elapsed, moves: state.movesSinceScramble, N: state.N, when: Date.now()});
+  state.stats.totalMoves += state.movesSinceScramble;
+  saveStats();
+  audio.win(); haptic([15,40,15,40,30]);
+  burstConfetti();
+  toast(`Solved in ${fmtTime(elapsed)} — ${state.movesSinceScramble} moves`);
+  state.scrambled = false;
+  refreshStats();
+}
+
+function burstConfetti(){
+  const wrap = $('#confetti');
+  const colors = ['#ffffff','#ffd000','#ff8c1a','#e6322a','#1ea64d','#1f6fe5','#b388ff','#6ea8ff'];
+  for(let i=0;i<70;i++){
+    const e = document.createElement('div');
+    e.className = 'conf';
+    e.style.left = Math.random()*100 + 'vw';
+    e.style.background = colors[i%colors.length];
+    e.style.animationDuration = (1.6 + Math.random()*1.4) + 's';
+    e.style.transform = `rotate(${Math.random()*360}deg)`;
+    wrap.appendChild(e);
+    setTimeout(()=>e.remove(), 3500);
+  }
+}
+
+// ---------- Undo / Redo ----------
+function undoMove(){
+  if(state.isSolving || animQueue.length || currentAnim) return;
+  const last = state.history.pop();
+  if(!last) return;
+  const inv = inverseMove(last);
+  state.redo.push(last);
+  queueMove(inv, {recordHistory:false, silent:false});
+  updateMoveUI();
+}
+function redoMove(){
+  if(state.isSolving) return;
+  const m = state.redo.pop();
+  if(!m) return;
+  queueMove(m, {recordHistory:false, silent:false});
+  state.history.push(m); updateMoveUI();
+}
+
+// ---------- Touch / Pointer Controls ----------
+const pointer = {
+  active: new Map(), // id -> {x,y,startX,startY,t}
+  pinchStart: 0,
+  pinchDistStart: 0,
+  pinchDistLast: 0,
+  twoFinger: false,
+  rotating: false,
+  draggingCubie: null, // { mesh, face, normal, planePoint }
+  lastTap: 0,
+  longPressT: null,
+};
+const raycaster = new THREE.Raycaster();
+const ndc = new THREE.Vector2();
+
+function getNDC(x,y){
+  const r = renderer.domElement.getBoundingClientRect();
+  ndc.x = ((x - r.left)/r.width)*2 - 1;
+  ndc.y = -((y - r.top)/r.height)*2 + 1;
+}
+function pickSticker(x,y){
+  getNDC(x,y);
+  raycaster.setFromCamera(ndc, camera);
+  const hits = raycaster.intersectObjects(stickerList, false);
+  return hits[0] || null;
+}
+
+renderer.domElement.addEventListener('pointerdown', e => {
+  renderer.domElement.setPointerCapture(e.pointerId);
+  pointer.active.set(e.pointerId, {x:e.clientX,y:e.clientY,startX:e.clientX,startY:e.clientY,t:performance.now()});
+  if(pointer.active.size===2){
+    // start pinch / two-finger orbit
+    pointer.twoFinger = true;
+    const pts = Array.from(pointer.active.values());
+    pointer.pinchDistStart = Math.hypot(pts[0].x-pts[1].x, pts[0].y-pts[1].y);
+    pointer.pinchDistLast = pointer.pinchDistStart;
+    pointer.draggingCubie = null;
+    return;
+  }
+  // single pointer: paint mode handles taps; otherwise possible cubie drag (layer turn) or camera orbit.
+  if(state.paintMode){
+    return; // handle on tap-up
+  }
+  const hit = pickSticker(e.clientX, e.clientY);
+  if(hit){
+    pointer.draggingCubie = {
+      mesh: hit.object,
+      face: hit.object.userData.face,
+      worldNormal: hit.face.normal.clone().transformDirection(hit.object.matrixWorld).normalize(),
+      startNDC: { x: ndc.x, y: ndc.y },
+      startScreen: { x: e.clientX, y: e.clientY },
+      handled: false,
+    };
+  } else {
+    pointer.rotating = true;
+  }
+  // long press for advanced (toggle paint quick)
+  pointer.longPressT = setTimeout(()=>{
+    pointer.longPressT = null;
+    if(pointer.active.size===1){
+      haptic(30);
+      toast(state.paintMode? 'Paint mode off' : 'Paint mode on (long-press)');
+      togglePaintMode(!state.paintMode);
+    }
+  }, 600);
+});
+
+renderer.domElement.addEventListener('pointermove', e => {
+  const p = pointer.active.get(e.pointerId);
+  if(!p) return;
+  const dx = e.clientX - p.x, dy = e.clientY - p.y;
+  p.x = e.clientX; p.y = e.clientY;
+
+  if(pointer.longPressT && (Math.abs(e.clientX-p.startX)>8 || Math.abs(e.clientY-p.startY)>8)){
+    clearTimeout(pointer.longPressT); pointer.longPressT = null;
+  }
+
+  if(pointer.twoFinger && pointer.active.size>=2){
+    // pinch zoom
+    const pts = Array.from(pointer.active.values());
+    const d = Math.hypot(pts[0].x-pts[1].x, pts[0].y-pts[1].y);
+    const delta = d - pointer.pinchDistLast;
+    pointer.pinchDistLast = d;
+    cameraRig.targetDist = clamp(cameraRig.targetDist - delta*0.02, 5, 20);
+    // two-finger orbit (midpoint movement)
+    const mx = (pts[0].x+pts[1].x)/2, my = (pts[0].y+pts[1].y)/2;
+    if(pointer._midLast){
+      const mdx = mx - pointer._midLast.x, mdy = my - pointer._midLast.y;
+      cameraRig.targetYaw -= mdx*0.005;
+      cameraRig.targetPitch = clamp(cameraRig.targetPitch + mdy*0.005, -1.2, 1.2);
+    }
+    pointer._midLast = {x:mx,y:my};
+    return;
+  }
+
+  if(pointer.draggingCubie && !pointer.draggingCubie.handled && !state.paintMode){
+    const totalDX = e.clientX - pointer.draggingCubie.startScreen.x;
+    const totalDY = e.clientY - pointer.draggingCubie.startScreen.y;
+    if(Math.hypot(totalDX,totalDY) > 18){
+      // determine swipe direction in screen space and translate to a face move
+      handleSwipeMove(pointer.draggingCubie, totalDX, totalDY);
+      pointer.draggingCubie.handled = true;
+    }
+    return;
+  }
+
+  if(pointer.rotating){
+    cameraRig.targetYaw -= dx*0.008;
+    cameraRig.targetPitch = clamp(cameraRig.targetPitch + dy*0.008, -1.2, 1.2);
+  }
+});
+
+function endPointer(e){
+  const p = pointer.active.get(e.pointerId);
+  pointer.active.delete(e.pointerId);
+  if(pointer.longPressT){ clearTimeout(pointer.longPressT); pointer.longPressT = null; }
+  if(pointer.active.size<2){
+    pointer.twoFinger = false; pointer._midLast = null;
+  }
+  if(pointer.active.size===0){
+    pointer.rotating = false;
+  }
+  // tap handling
+  if(p){
+    const dt = performance.now() - p.t;
+    const dist = Math.hypot(e.clientX-p.startX, e.clientY-p.startY);
+    if(dt < 250 && dist < 8){
+      const now = performance.now();
+      if(now - pointer.lastTap < 300){
+        // double tap
+        cameraRig.targetYaw = -0.6; cameraRig.targetPitch = 0.55; cameraRig.targetDist = state.N<=3?8.5:(state.N<=4?9.5:(state.N<=5?10.5:12));
+        haptic(12); toast('Camera reset');
+        pointer.lastTap = 0;
+      } else {
+        pointer.lastTap = now;
+        if(state.paintMode){
+          const hit = pickSticker(e.clientX, e.clientY);
+          if(hit){ paintSticker(hit.object); }
+        }
+      }
+    }
+  }
+  pointer.draggingCubie = null;
+}
+renderer.domElement.addEventListener('pointerup', endPointer);
+renderer.domElement.addEventListener('pointercancel', endPointer);
+
+// Translate a swipe on a cubie into a layer turn
+function handleSwipeMove(drag, dx, dy){
+  // We use the picked sticker's face to determine candidate axes for turning.
+  // Project two in-plane axes of that face into screen space, then choose the closer one.
+  const face = drag.face;
+  // Build two in-plane direction vectors for this face (a, b)
+  let a, b; // a is "horizontal-ish", b is "vertical-ish" on that face
+  switch(face){
+    case 'U': a = new THREE.Vector3(1,0,0); b = new THREE.Vector3(0,0,1); break;
+    case 'D': a = new THREE.Vector3(1,0,0); b = new THREE.Vector3(0,0,1); break;
+    case 'F': a = new THREE.Vector3(1,0,0); b = new THREE.Vector3(0,1,0); break;
+    case 'B': a = new THREE.Vector3(1,0,0); b = new THREE.Vector3(0,1,0); break;
+    case 'L': a = new THREE.Vector3(0,0,1); b = new THREE.Vector3(0,1,0); break;
+    case 'R': a = new THREE.Vector3(0,0,1); b = new THREE.Vector3(0,1,0); break;
+  }
+  // project to screen
+  const origin = new THREE.Vector3(); drag.mesh.getWorldPosition(origin);
+  const pA = origin.clone().add(a), pB = origin.clone().add(b);
+  const sO = worldToScreen(origin), sA = worldToScreen(pA), sB = worldToScreen(pB);
+  const vA = {x:sA.x-sO.x, y:sA.y-sO.y};
+  const vB = {x:sB.x-sO.x, y:sB.y-sO.y};
+  // swipe vector (note: screen y is downward)
+  const sw = {x:dx, y:dy};
+  // dot products
+  const dotA = (sw.x*vA.x + sw.y*vA.y);
+  const dotB = (sw.x*vB.x + sw.y*vB.y);
+  const useA = Math.abs(dotA) > Math.abs(dotB);
+  const axisVec = useA ? a : b;
+  const dot = useA ? dotA : dotB;
+  // Rotation axis: cross(faceNormal, axisVec) — moves the layer along axisVec when face is up
+  const n = faceNormal(face);
+  const rotAxis = new THREE.Vector3().crossVectors(n, axisVec).normalize();
+  // sign by dot
+  // Find which logical face corresponds to rotAxis (the axis whose +/- direction matches rotAxis)
+  const rotFace = axisToFace(rotAxis);
+  if(!rotFace) return;
+  // Determine layer: which index along rotation axis the cubie is at
+  const cubie = drag.mesh.parent;
+  const N = state.N;
+  const idx = cubie.userData.idx;
+  const axisKey = FACE_AXIS[rotFace].axis;
+  const sign = FACE_AXIS[rotFace].sign;
+  const coord = axisKey==='x'?idx.xi : axisKey==='y'?idx.yi : idx.zi;
+  // layer from that face's outside:
+  const layer = sign>0 ? (N-1-coord) : coord;
+  // Direction: if dot>0, we rotate so that surface moves in +axisVec direction.
+  // moving +axisVec on face with normal n means rotation about rotAxis = cross(n, axisVec) by +90.
+  // Our queueMove dir is +1 for CW when viewed from outside that face.
+  // The +90 about rotAxis in our convention corresponds to dir=+1 only when rotAxis direction == face outward of rotFace.
+  // axisToFace returned the face whose outward = rotAxis (positive). So +rotation about rotAxis = CW from outside that face = dir +1.
+  const dir = dot > 0 ? 1 : -1;
+  queueMove({face: rotFace, layer, wide:1, dir, double:false});
+}
+function faceNormal(face){
+  switch(face){
+    case 'U': return new THREE.Vector3(0,1,0);
+    case 'D': return new THREE.Vector3(0,-1,0);
+    case 'R': return new THREE.Vector3(1,0,0);
+    case 'L': return new THREE.Vector3(-1,0,0);
+    case 'F': return new THREE.Vector3(0,0,1);
+    case 'B': return new THREE.Vector3(0,0,-1);
+  }
+}
+function axisToFace(v){
+  const ax = Math.abs(v.x), ay = Math.abs(v.y), az = Math.abs(v.z);
+  if(ax>ay && ax>az) return v.x>0 ? 'R' : 'L';
+  if(ay>ax && ay>az) return v.y>0 ? 'U' : 'D';
+  if(az>ax && az>ay) return v.z>0 ? 'F' : 'B';
+  return null;
+}
+function worldToScreen(v){
+  const p = v.clone().project(camera);
+  const r = renderer.domElement.getBoundingClientRect();
+  return { x: (p.x*0.5+0.5)*r.width + r.left, y: (-p.y*0.5+0.5)*r.height + r.top };
+}
+
+// Wheel zoom (desktop)
+renderer.domElement.addEventListener('wheel', e => {
+  e.preventDefault();
+  cameraRig.targetDist = clamp(cameraRig.targetDist + e.deltaY*0.01, 5, 20);
+}, {passive:false});
+
+// ---------- Paint mode ----------
+const paintUndoStack = [];
+function togglePaintMode(on){
+  state.paintMode = on;
+  $('#btnPaint').classList.toggle('primary', on);
+  if(on){
+    openSheet('sheetPaint');
+    $('#paintStatus').textContent = 'Tap a sticker to paint it.';
+  } else {
+    closeSheet();
+  }
+}
+function paintSticker(mesh){
+  paintUndoStack.push({mesh, prev: mesh.material.color.getHex()});
+  const color = PALETTE[state.paintColor];
+  mesh.material.color.setHex(color);
+  mesh.userData.colorIndex = state.paintColor;
+  haptic(8); audio.click(640, .03, 'sine', .04);
+}
+function paintUndo(){
+  const u = paintUndoStack.pop();
+  if(!u) return;
+  u.mesh.material.color.setHex(u.prev);
+  u.mesh.userData.colorIndex = colorIndexOf(u.prev);
+}
+function paintReset(){
+  // restore to natural face colors
+  for(const c of cubies){
+    for(const face in c.userData.stickers){
+      const s = c.userData.stickers[face];
+      s.material.color.setHex(FACE_COLORS[face]);
+      s.userData.colorIndex = colorIndexOf(FACE_COLORS[face]);
+    }
+  }
+  paintUndoStack.length = 0;
+}
+function validatePaint(){
+  // sticker counts: each color must appear N*N times. (Doesn't fully validate solvability but catches obvious errors.)
+  const N = state.N;
+  const counts = [0,0,0,0,0,0];
+  for(const s of stickerList) counts[s.userData.colorIndex]++;
+  const target = N*N;
+  const bad = counts.map((c,i)=> c===target ? null : `${['U','D','L','R','F','B'][i]}:${c}`).filter(Boolean);
+  return { ok: bad.length===0, msg: bad.length? `Invalid color counts (need ${target} each) → ${bad.join(', ')}` : `Valid color counts (${target} per face).` };
+}
+
+// ---------- UI: sheets & tabs ----------
+const sheets = ['sheetSettings','sheetPaint','sheetTrain'];
+function openSheet(id){
+  closeSheet();
+  $('#'+id).classList.add('open');
+  $('#backdrop').classList.add('open');
+}
+function closeSheet(){
+  sheets.forEach(s => $('#'+s).classList.remove('open'));
+  $('#backdrop').classList.remove('open');
+}
+$('#backdrop').addEventListener('click', () => {
+  // if paint mode, validate
+  if(state.paintMode){
+    const v = validatePaint();
+    $('#paintStatus').textContent = v.msg;
+    if(v.ok){ toast('Cube state accepted'); togglePaintMode(false); }
+    else { toast('Adjust colors: '+v.msg); return; }
+  }
+  closeSheet();
+});
+
+// Tabs
+$$('#sheetSettings .tab').forEach(t => {
+  t.addEventListener('click', () => {
+    $$('#sheetSettings .tab').forEach(x=>x.classList.remove('active'));
+    t.classList.add('active');
+    const k = t.dataset.tab;
+    $$('#sheetSettings .tab-pane').forEach(p => p.hidden = (p.dataset.pane!==k));
+    if(k==='stats') refreshStats();
+  });
+});
+
+// Puzzle options
+const STD = [
+  {n:2, label:'2×2', sub:'Pocket'},
+  {n:3, label:'3×3', sub:'Classic'},
+  {n:4, label:'4×4', sub:'Revenge'},
+  {n:5, label:'5×5', sub:'Professor'},
+  {n:6, label:'6×6', sub:'V-Cube 6'},
+  {n:7, label:'7×7', sub:'V-Cube 7'},
+];
+const SPEC = [
+  {key:'pyraminx', label:'Pyraminx', sub:'preview'},
+  {key:'megaminx', label:'Megaminx', sub:'preview'},
+  {key:'mirror', label:'Mirror', sub:'preview'},
+  {key:'skewb', label:'Skewb', sub:'preview'},
+  {key:'fisher', label:'Fisher', sub:'preview'},
+  {key:'ivy', label:'Ivy', sub:'preview'},
+];
+function renderPuzzleOptions(){
+  const std = $('#puzzleStd'); std.innerHTML='';
+  STD.forEach(p => {
+    const e = document.createElement('div');
+    e.className = 'opt' + (p.n===state.N ? ' active':'');
+    e.innerHTML = `${p.label}<span class="sub">${p.sub}</span>`;
+    e.addEventListener('click', () => {
+      if(state.isSolving) return;
+      buildCube(p.n); renderPuzzleOptions(); toast(`Switched to ${p.label}`);
+    });
+    std.appendChild(e);
+  });
+  const sp = $('#puzzleSpec'); sp.innerHTML='';
+  SPEC.forEach(p => {
+    const e = document.createElement('div');
+    e.className = 'opt';
+    e.innerHTML = `${p.label}<span class="sub">${p.sub}</span>`;
+    e.addEventListener('click', () => toast(`${p.label}: visual preview only in this build`));
+    sp.appendChild(e);
+  });
+}
+renderPuzzleOptions();
+
+// Palette
+const paletteEl = $('#palette');
+PALETTE.forEach((c,i) => {
+  const s = document.createElement('div');
+  s.className = 'sw' + (i===state.paintColor?' active':'');
+  s.style.background = '#'+c.toString(16).padStart(6,'0');
+  s.addEventListener('click', () => {
+    state.paintColor = i;
+    $$('#palette .sw').forEach((el,idx)=>el.classList.toggle('active', idx===i));
+  });
+  paletteEl.appendChild(s);
+});
+
+// Quick moves (3x3)
+const QUICK = ["U","U'","R","R'","F","F'","L","L'","D","D'","B","B'","U2","R2","F2","L2"];
+const qm = $('#quickMoves');
+QUICK.forEach(n => {
+  const b = document.createElement('div');
+  b.className = 'opt';
+  b.textContent = n;
+  b.addEventListener('click', () => {
+    const m = notationToMove(n);
+    if(m) queueMove(m);
+  });
+  qm.appendChild(b);
+});
+
+// Lessons
+const LESSONS = [
+  { title: "1) White Cross", body: "Build a white cross on top by aligning white edges with the center colors of side faces." },
+  { title: "2) White Corners", body: "Insert white corners into the bottom layer using R U R' U' (the 'sexy move')." },
+  { title: "3) Middle Layer Edges", body: "Pair an edge with its center, then insert using U R U' R' U' F' U F (right) or mirror for left." },
+  { title: "4) Yellow Cross", body: "Orient the last layer edges using F R U R' U' F'. Repeat based on the pattern." },
+  { title: "5) Orient Yellow Corners", body: "Use R U R' U R U2 R' to orient remaining corners until all yellow is up." },
+  { title: "6) Permute Last Layer", body: "Cycle edges/corners with the A-perm and U-perm algorithms to finish the cube." },
+];
+const ALGOS = [
+  { name: "Sexy Move", seq: "R U R' U'" },
+  { name: "Sledgehammer", seq: "R' F R F'" },
+  { name: "Sune", seq: "R U R' U R U2 R'" },
+  { name: "Anti-Sune", seq: "R' U' R U' R' U2 R" },
+  { name: "T-Perm", seq: "R U R' U' R' F R2 U' R' U' R U R' F'" },
+  { name: "Y-Perm", seq: "F R U' R' U' R U R' F' R U R' U' R' F R F'" },
+];
+const lessonList = $('#lessonList');
+LESSONS.forEach((l,i) => {
+  const e = document.createElement('div');
+  e.className = 'opt';
+  e.style.textAlign='left';
+  e.innerHTML = `<div style="font-weight:700">${l.title}</div><div class="sub" style="text-align:left">${l.body}</div>`;
+  lessonList.appendChild(e);
+});
+const algoList = $('#algoList');
+ALGOS.forEach(a => {
+  const e = document.createElement('div');
+  e.className = 'opt'; e.style.textAlign='left';
+  e.innerHTML = `<div style="font-weight:700">${a.name}</div><div class="sub" style="text-align:left;font-family:ui-monospace,Menlo,monospace">${a.seq}</div>`;
+  e.addEventListener('click', () => {
+    const tokens = a.seq.split(/\s+/);
+    tokens.forEach(t => { const m = notationToMove(t); if(m) queueMove(m); });
+    toast(`Running ${a.name}`);
+    closeSheet();
+  });
+  algoList.appendChild(e);
+});
+
+// ---------- Stats refresh ----------
+function refreshStats(){
+  const s = state.stats;
+  $('#sCount').textContent = s.solves.length;
+  $('#sMoves').textContent = s.totalMoves;
+  const ms = s.solves.map(x=>x.ms);
+  $('#sLast').textContent = ms.length? fmtTime(ms[ms.length-1]) : '—';
+  $('#sBest').textContent = ms.length? fmtTime(Math.min(...ms)) : '—';
+  const ao = n => {
+    if(ms.length<n) return '—';
+    const last = ms.slice(-n).slice().sort((a,b)=>a-b).slice(1,-1);
+    return fmtTime(last.reduce((a,b)=>a+b,0)/last.length);
+  };
+  $('#sAo5').textContent = ao(5);
+  $('#sAo12').textContent = ao(12);
+  const hist = s.solves.slice(-20).reverse().map(x=>`${new Date(x.when).toLocaleTimeString()}  ${x.N}×${x.N}  ${fmtTime(x.ms)}  ${x.moves} moves`).join('\n');
+  $('#histList').textContent = hist || 'No solves yet.';
+}
+
+// ---------- Wiring ----------
+$('#btnScramble').addEventListener('click', () => { closeSheet(); doScramble(); });
+$('#btnSolve').addEventListener('click', () => { closeSheet(); doSolve(); });
+$('#btnSettings').addEventListener('click', () => openSheet('sheetSettings'));
+$('#btnTrain').addEventListener('click', () => openSheet('sheetTrain'));
+$('#btnPaint').addEventListener('click', () => togglePaintMode(!state.paintMode));
+$('#btnUndo').addEventListener('click', undoMove);
+$('#btnRedo').addEventListener('click', redoMove);
+$('#btnReset').addEventListener('click', () => { cameraRig.targetYaw=-0.6; cameraRig.targetPitch=0.55; cameraRig.targetDist=state.N<=3?8.5:9.5; toast('Camera reset'); });
+$('#btnAuto').addEventListener('click', e => { state.autoRotate=!state.autoRotate; e.currentTarget.classList.toggle('primary', state.autoRotate); toast('Auto rotate '+(state.autoRotate?'on':'off')); });
+
+$('#btnPaintUndo').addEventListener('click', paintUndo);
+$('#btnPaintReset').addEventListener('click', paintReset);
+$('#btnPaintDone').addEventListener('click', () => {
+  const v = validatePaint(); $('#paintStatus').textContent = v.msg;
+  if(v.ok){ togglePaintMode(false); }
+});
+
+$('#btnClearStats').addEventListener('click', () => {
+  state.stats = defaultStats(); saveStats(); refreshStats(); toast('Stats cleared');
+});
+$('#btnReplay').addEventListener('click', () => {
+  // simple replay: re-scramble using lastScrambleMoves then re-play their inverse slowly
+  if(!state.lastScrambleMoves.length){ toast('No solve to replay'); return; }
+  resetCube(false);
+  const seq = state.lastScrambleMoves.slice();
+  seq.forEach(m => queueMove(m, {speedMul:0.5, recordHistory:false, silent:true}));
+  setTimeout(()=>{
+    const inv = inverseSequence(state.lastScrambleMoves);
+    inv.forEach(m => queueMove(m, {speedMul:1.4, recordHistory:false, silent:false}));
+  }, state.animMs*0.5*seq.length + 200);
+  closeSheet();
+});
+
+$('#scrambleLen').addEventListener('input', e => {
+  state.scrambleLen = parseInt(e.target.value,10);
+  $('#scrambleLenVal').textContent = state.scrambleLen;
+});
+$('#animSpeed').addEventListener('input', e => { state.animMs = 580 - parseInt(e.target.value,10); });
+$('#solveSpeed').addEventListener('input', e => { state.solveSpeedPct = parseInt(e.target.value,10); });
+
+function toggleSwitch(id, key){
+  const el = $('#'+id);
+  el.addEventListener('click', () => {
+    state[key] = !state[key]; el.classList.toggle('on', state[key]);
+    if(key==='shadows'){ renderer.shadowMap.enabled = state.shadows; }
+    if(key==='battery'){
+      renderer.setPixelRatio(state.battery ? 1 : Math.min(window.devicePixelRatio,2));
+    }
+  });
+}
+toggleSwitch('tgHaptic','haptics');
+toggleSwitch('tgSound','sound');
+toggleSwitch('tgShadow','shadows');
+toggleSwitch('tgBattery','battery');
+
+$('#btnSaveState').addEventListener('click', () => {
+  // save sticker color map per cubie idx+face
+  const data = { N: state.N, stickers: [] };
+  for(const c of cubies){
+    const e = { idx: c.userData.idx, pos: c.position.toArray(), quat: c.quaternion.toArray(), faces:{} };
+    for(const f in c.userData.stickers){ e.faces[f] = c.userData.stickers[f].userData.colorIndex; }
+    data.stickers.push(e);
+  }
+  try{ localStorage.setItem('neocube_state', JSON.stringify(data)); toast('State saved'); }
+  catch(e){ toast('Save failed'); }
+});
+$('#btnLoadState').addEventListener('click', () => {
+  try{
+    const data = JSON.parse(localStorage.getItem('neocube_state')||'null');
+    if(!data){ toast('No saved state'); return; }
+    buildCube(data.N);
+    // restore position/rotation/colors
+    for(let i=0;i<cubies.length && i<data.stickers.length;i++){
+      const c = cubies[i], d = data.stickers[i];
+      c.position.fromArray(d.pos);
+      c.quaternion.fromArray(d.quat);
+      for(const f in d.faces){
+        if(c.userData.stickers[f]){
+          c.userData.stickers[f].material.color.setHex(PALETTE[d.faces[f]]);
+          c.userData.stickers[f].userData.colorIndex = d.faces[f];
+        }
+      }
+    }
+    toast('State loaded');
+  }catch(e){ toast('Load failed'); }
+});
+
+function updateMoveUI(){
+  $('#moveVal').textContent = state.movesSinceScramble;
+  $('#historyText').textContent = state.history.map(moveToNotation).join(' ') || '—';
+}
+function showHint(t){ const e = $('#hint'); e.textContent = t; e.classList.add('show'); }
+function hideHint(){ $('#hint').classList.remove('show'); }
+function toast(t){
+  const e = $('#toast'); e.textContent = t; e.classList.add('show');
+  clearTimeout(toast._t); toast._t = setTimeout(()=>e.classList.remove('show'), 1800);
+}
+
+// ---------- Keyboard (desktop) ----------
+const KEYMAP = { u:'U', d:'D', l:'L', r:'R', f:'F', b:'B' };
+window.addEventListener('keydown', e => {
+  const k = e.key.toLowerCase();
+  if(KEYMAP[k]){
+    const face = KEYMAP[k];
+    const dir = e.shiftKey ? -1 : 1;
+    queueMove({face, layer:0, wide:1, dir, double:false});
+  } else if(k===' '){ e.preventDefault(); doScramble(); }
+  else if(k==='s'){ doSolve(); }
+  else if(k==='z'){ undoMove(); }
+  else if(k==='y'){ redoMove(); }
+});
+
+// ---------- Resize ----------
+function onResize(){
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  camera.aspect = window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', onResize);
+window.addEventListener('orientationchange', onResize);
+
+// ---------- Animation loop ----------
+let last = performance.now();
+let movesAtT = []; // for TPS
+function loop(now){
+  const dt = (now - last)/1000; last = now;
+  // ease camera
+  cameraRig.yaw = lerp(cameraRig.yaw, cameraRig.targetYaw, 1 - Math.pow(0.001, dt));
+  cameraRig.pitch = lerp(cameraRig.pitch, cameraRig.targetPitch, 1 - Math.pow(0.001, dt));
+  cameraRig.dist = lerp(cameraRig.dist, cameraRig.targetDist, 1 - Math.pow(0.005, dt));
+  if(state.autoRotate && pointer.active.size===0){ cameraRig.targetYaw -= dt*0.25; }
+  updateCamera();
+  bgPoints.rotation.y += dt*0.02;
+  // timer & tps
+  if(state.timerRunning){
+    const ms = performance.now() - state.startTime;
+    $('#timeVal').textContent = (ms/1000).toFixed(2);
+  }
+  // tps over last 4s
+  const cut = now - 4000;
+  while(movesAtT.length && movesAtT[0] < cut) movesAtT.shift();
+  $('#tpsVal').textContent = (movesAtT.length / 4).toFixed(1);
+  renderer.render(scene, camera);
+  requestAnimationFrame(loop);
+}
+// hook move counter into finalize
+const _origFinalize = finalizeMove;
+finalizeMove = function(move, opts={}){
+  _origFinalize(move, opts);
+  if(opts.recordHistory !== false){ movesAtT.push(performance.now()); }
+};
+
+// ---------- Boot ----------
+buildCube(3);
+onResize();
+requestAnimationFrame(loop);
+setTimeout(()=>{ $('#splash').classList.add('hide'); setTimeout(()=>$('#splash').remove(), 600); }, 500);
+
+// Initial helpful toast
+setTimeout(()=>toast('Swipe a face to turn • Drag empty space to orbit'), 900);
+
+// Detect low-end and auto-enable battery saver
+if(navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4){
+  // softer shadows
+  renderer.shadowMap.type = THREE.BasicShadowMap;
+}
+
+})();
+</script>
+</body>
+</html>
