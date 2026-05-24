@@ -1,97 +1,115 @@
-*{
-    margin:0;
-    padding:0;
-    box-sizing:border-box;
-    font-family:Arial,sans-serif;
-    touch-action:none;
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: Arial, sans-serif;
+    touch-action: none;
 }
 
-body{
-    overflow:hidden;
-    background:#111;
-    color:white;
+body {
+    overflow: hidden;
+    background: #111;
+    color: white;
 }
 
-canvas{
-    display:block;
+canvas {
+    display: block;
 }
 
-#top-bar{
-    position:absolute;
-    top:10px;
-    left:10px;
-    right:10px;
-
-    display:flex;
-    justify-content:space-between;
-
-    z-index:100;
+#top-bar {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    right: 10px;
+    display: flex;
+    justify-content: space-between;
+    z-index: 100;
 }
 
-#bottom-bar{
-    position:absolute;
-    bottom:20px;
-    left:10px;
-    right:10px;
-
-    display:flex;
-    justify-content:space-around;
-
-    z-index:100;
+#bottom-bar {
+    position: absolute;
+    bottom: 20px;
+    left: 10px;
+    right: 10px;
+    display: flex;
+    justify-content: space-around;
+    z-index: 100;
 }
 
-button,select{
-    padding:14px 18px;
-    border:none;
-    border-radius:10px;
-
-    background:#222;
-    color:white;
-
-    font-size:15px;
-    font-weight:bold;
-
-    cursor:pointer;
+button, select {
+    padding: 14px 18px;
+    border: none;
+    border-radius: 10px;
+    background: #222;
+    color: white;
+    font-size: 15px;
+    font-weight: bold;
+    cursor: pointer;
 }
 
-button:active{
-    transform:scale(0.96);
+button:active {
+    transform: scale(0.96);
 }
 
-#tutorial-toggle{
-    background:#e91e63;
+#tutorial-toggle {
+    background: #e91e63;
 }
 
-#scramble-btn{
-    background:#ff9800;
+#scramble-btn {
+    background: #ff9800;
 }
 
-#solve-btn{
-    background:#4caf50;
+#solve-btn {
+    background: #4caf50;
 }
 
-#tutorial-panel{
-    position:absolute;
-
-    top:70px;
-    left:10px;
-    right:10px;
-
-    background:rgba(0,0,0,.85);
-
-    padding:20px;
-
-    border-radius:15px;
-
-    z-index:100;
+#tutorial-panel {
+    position: absolute;
+    top: 70px;
+    left: 10px;
+    right: 10px;
+    background: rgba(0, 0, 0, 0.85);
+    padding: 20px;
+    border-radius: 15px;
+    z-index: 100;
+    max-width: 400px;
+    margin: 0 auto;
 }
 
-.hidden{
-    display:none;
+.hidden {
+    display: none;
 }
 
-.tutorial-controls{
-    display:flex;
-    justify-content:space-between;
-    margin-top:15px;
+.tutorial-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 15px;
+}
+
+#tutorial-step {
+    font-weight: bold;
+    color: #aaa;
+}
+
+/* Move buttons for manual control */
+#move-controls {
+    position: absolute;
+    top: 50%;
+    right: 10px;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    z-index: 100;
+}
+
+.move-btn {
+    padding: 8px 12px;
+    font-size: 12px;
+    background: #333;
+}
+
+.move-btn:hover {
+    background: #444;
 }
