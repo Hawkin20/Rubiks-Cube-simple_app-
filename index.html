@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1.0,
+        maximum-scale=1.0,
+        user-scalable=no"/>
+
+  <title>Rubik's Cube Tutorial App</title>
+
+  <link rel="stylesheet" href="./css/style.css" />
+</head>
+
+<body>
+
+<header id="top-bar">
+
+  <select id="cube-selector">
+    <option value="3x3">3x3 Classic</option>
+    <option value="5x5">5x5 Professor</option>
+    <option value="pyraminx">Pyraminx</option>
+  </select>
+
+  <button id="tutorial-toggle">
+    Learn to Solve
+  </button>
+
+</header>
+
+<div id="tutorial-panel" class="hidden">
+
+  <h2 id="step-title">
+    Step 1: White Cross
+  </h2>
+
+  <p id="step-desc">
+    Match white edges with center colors.
+  </p>
+
+  <div class="tutorial-controls">
+    <button id="prev-step">« Prev</button>
+    <button id="next-step">Next »</button>
+  </div>
+
+</div>
+
+<footer id="bottom-bar">
+
+  <button id="scramble-btn">
+    Scramble
+  </button>
+
+  <button id="solve-btn">
+    Auto Solve
+  </button>
+
+</footer>
+
+<!-- THREE.JS -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+<script type="module" src="./js/app.js"></script>
+
+</body>
+</html>
