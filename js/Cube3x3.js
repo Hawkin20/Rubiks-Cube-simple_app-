@@ -4,7 +4,8 @@ export class Cube3x3 {
         this.group = new THREE.Group();
         this.cubies = [];
         this.isAnimating = false;
-        
+        this.moveHistory = []; // For undo feature
+
         // Standard Rubik's colors: U D F B R L
         this.colors = {
             U: 0xffffff, // White (Up)
@@ -27,9 +28,7 @@ export class Cube3x3 {
         for (let x = -1; x <= 1; x++) {
             for (let y = -1; y <= 1; y++) {
                 for (let z = -1; z <= 1; z++) {
-                    // Determine which faces are visible for this cubie
                     const materials = this.getMaterials(x, y, z);
-                    
                     const geo = new THREE.BoxGeometry(size, size, size);
                     const cubie = new THREE.Mesh(geo, materials);
 
@@ -49,9 +48,7 @@ export class Cube3x3 {
     }
 
     getMaterials(x, y, z) {
-        // BoxGeometry faces: right, left, top, bottom, front, back
-        // We need to map these to R, L, U, D, F, B
-        
+        // BoxGeometry faces: right(+x), left(-x), top(+y), bottom(-y), front(+z), back(-z)
         const mat = (color) => new THREE.MeshStandardMaterial({ 
             color: color,
             roughness: 0.3,
@@ -59,30 +56,43 @@ export class Cube3x3 {
         });
 
         return [
-            x === 1 ? mat(this.colors.R) : mat(this.colors.CORE),  // Right
-            x === -1 ? mat(this.colors.L) : mat(this.colors.CORE), // Left
-            y === 1 ? mat(this.colors.U) : mat(this.colors.CORE),  // Up
-            y === -1 ? mat(this.colors.D) : mat(this.colors.CORE), // Down
-            z === 1 ? mat(this.colors.F) : mat(this.colors.CORE),  // Front
-            z === -1 ? mat(this.colors.B) : mat(this.colors.CORE), // Back
+            x === 1 ? mat(this.colors.R) : mat(this.colors.CORE),  // Right face (+x)
+            x === -1 ? mat(this.colors.L) : mat(this.colors.CORE), // Left face (-x)
+            y === 1 ? mat(this.colors.U) : mat(this.colors.CORE),  // Top face (+y)
+            y === -1 ? mat(this.colors.D) : mat(this.colors.CORE), // Bottom face (-y)
+            z === 1 ? mat(this.colors.F) : mat(this.colors.CORE),  // Front face (+z)
+            z === -1 ? mat(this.colors.B) : mat(this.colors.CORE), // Back face (-z)
         ];
     }
 
-    // Get cubies on a specific face
+    // Get cubies on a specific face (by their CURRENT world position)
     getFaceCubies(face) {
-        const epsilon = 0.1;
+        const epsilon = 0.15;
+        const axis = this.getFaceAxis(face);
+        
         return this.cubies.filter(cubie => {
-            const pos = cubie.position;
-            switch(face) {
-                case 'U': return Math.abs(pos.y - 1.02) < epsilon;
-                case 'D': return Math.abs(pos.y + 1.02) < epsilon;
-                case 'F': return Math.abs(pos.z - 1.02) < epsilon;
-                case 'B': return Math.abs(pos.z + 1.02) < epsilon;
-                case 'R': return Math.abs(pos.x - 1.02) < epsilon;
-                case 'L': return Math.abs(pos.x + 1.02) < epsilon;
-                default: return false;
-            }
+            // Get world position (accounting for parent group rotation)
+            const worldPos = new THREE.Vector3();
+            cubie.getWorldPosition(worldPos);
+            
+            // Check if this cubie is on the target face layer
+            const targetValue = axis.direction * 1.02;
+            const currentValue = worldPos[axis.coordinate];
+            
+            return Math.abs(currentValue - targetValue) < epsilon;
         });
+    }
+
+    getFaceAxis(face) {
+        switch(face) {
+            case 'U': return { coordinate: 'y', direction: 1, axis: new THREE.Vector3(0, 1, 0) };
+            case 'D': return { coordinate: 'y', direction: -1, axis: new THREE.Vector3(0, -1, 0) };
+            case 'F': return { coordinate: 'z', direction: 1, axis: new THREE.Vector3(0, 0, 1) };
+            case 'B': return { coordinate: 'z', direction: -1, axis: new THREE.Vector3(0, 0, -1) };
+            case 'R': return { coordinate: 'x', direction: 1, axis: new THREE.Vector3(1, 0, 0) };
+            case 'L': return { coordinate: 'x', direction: -1, axis: new THREE.Vector3(-1, 0, 0) };
+            default: return { coordinate: 'y', direction: 1, axis: new THREE.Vector3(0, 1, 0) };
+        }
     }
 
     // Rotate a face: face = 'U','D','F','B','R','L', direction = 1 (clockwise) or -1 (counter)
@@ -90,65 +100,104 @@ export class Cube3x3 {
         if (this.isAnimating) return;
         this.isAnimating = true;
 
+        // Record move for history
+        this.moveHistory.push({ face, dir: direction });
+
         const faceCubies = this.getFaceCubies(face);
+        const faceAxis = this.getFaceAxis(face);
+        
+        // Create pivot at center of the face layer
         const pivot = new THREE.Group();
         
-        // Add face cubies to pivot
-        faceCubies.forEach(cubie => {
-            this.group.remove(cubie);
-            pivot.add(cubie);
-        });
+        // Position pivot at the center of rotation
+        const pivotPos = new THREE.Vector3();
+        if (face === 'U' || face === 'D') pivotPos.set(0, faceAxis.direction * 1.02, 0);
+        else if (face === 'F' || face === 'B') pivotPos.set(0, 0, faceAxis.direction * 1.02);
+        else if (face === 'R' || face === 'L') pivotPos.set(faceAxis.direction * 1.02, 0, 0);
         
+        pivot.position.copy(pivotPos);
         this.group.add(pivot);
 
-        // Determine rotation axis
-        const axis = new THREE.Vector3();
-        switch(face) {
-            case 'U': axis.set(0, 1, 0); break;
-            case 'D': axis.set(0, -1, 0); break;
-            case 'F': axis.set(0, 0, 1); break;
-            case 'B': axis.set(0, 0, -1); break;
-            case 'R': axis.set(1, 0, 0); break;
-            case 'L': axis.set(-1, 0, 0); break;
-        }
+        // Move cubies from main group to pivot (maintaining world transform)
+        faceCubies.forEach(cubie => {
+            // Save current world transform
+            const worldPos = new THREE.Vector3();
+            const worldQuat = new THREE.Quaternion();
+            const worldScale = new THREE.Vector3();
+            
+            cubie.matrixWorld.decompose(worldPos, worldQuat, worldScale);
+            
+            // Remove from main group
+            this.group.remove(cubie);
+            
+            // Add to pivot
+            pivot.add(cubie);
+            
+            // Restore world transform (now relative to pivot)
+            cubie.position.copy(worldPos).sub(pivotPos);
+            cubie.quaternion.copy(worldQuat);
+            cubie.scale.copy(worldScale);
+        });
 
         // Animate rotation
-        const targetRotation = (Math.PI / 2) * direction;
+        const targetAngle = (Math.PI / 2) * direction;
         
         gsap.to(pivot.rotation, {
-            x: axis.x * targetRotation,
-            y: axis.y * targetRotation,
-            z: axis.z * targetRotation,
+            x: faceAxis.axis.x * targetAngle,
+            y: faceAxis.axis.y * targetAngle,
+            z: faceAxis.axis.z * targetAngle,
             duration: duration,
             ease: "power2.inOut",
             onComplete: () => {
-                // Snap to exact 90 degrees and reparent
+                // Apply final rotation
                 pivot.updateMatrixWorld();
                 
+                // Move cubies back to main group with updated transforms
                 faceCubies.forEach(cubie => {
-                    pivot.remove(cubie);
+                    // Get final world transform
+                    const finalWorldPos = new THREE.Vector3();
+                    const finalWorldQuat = new THREE.Quaternion();
+                    const finalWorldScale = new THREE.Vector3();
                     
-                    // Get world position/rotation
-                    const worldPos = new THREE.Vector3();
-                    const worldQuat = new THREE.Quaternion();
-                    cubie.getWorldPosition(worldPos);
-                    cubie.getWorldQuaternion(worldQuat);
+                    cubie.matrixWorld.decompose(finalWorldPos, finalWorldQuat, finalWorldScale);
+                    
+                    // Remove from pivot
+                    pivot.remove(cubie);
                     
                     // Add back to main group
                     this.group.add(cubie);
-                    cubie.position.copy(worldPos);
-                    cubie.quaternion.copy(worldQuat);
                     
-                    // Snap position to grid
+                    // Set new position (world space)
+                    cubie.position.copy(finalWorldPos);
+                    cubie.quaternion.copy(finalWorldQuat);
+                    cubie.scale.copy(finalWorldScale);
+                    
+                    // Snap to grid (round to nearest 1.02 spacing)
                     cubie.position.x = Math.round(cubie.position.x / 1.02) * 1.02;
                     cubie.position.y = Math.round(cubie.position.y / 1.02) * 1.02;
                     cubie.position.z = Math.round(cubie.position.z / 1.02) * 1.02;
+                    
+                    // Snap rotation to nearest 90 degrees
+                    const euler = new THREE.Euler().setFromQuaternion(cubie.quaternion);
+                    euler.x = Math.round(euler.x / (Math.PI/2)) * (Math.PI/2);
+                    euler.y = Math.round(euler.y / (Math.PI/2)) * (Math.PI/2);
+                    euler.z = Math.round(euler.z / (Math.PI/2)) * (Math.PI/2);
+                    cubie.quaternion.setFromEuler(euler);
                 });
                 
+                // Clean up pivot
                 this.group.remove(pivot);
                 this.isAnimating = false;
             }
         });
+    }
+
+    // Undo last move
+    undo() {
+        if (this.moveHistory.length === 0 || this.isAnimating) return;
+        
+        const lastMove = this.moveHistory.pop();
+        this.rotateFace(lastMove.face, -lastMove.dir);
     }
 
     // Scramble: perform 20 random moves
@@ -164,39 +213,43 @@ export class Cube3x3 {
             moves.push({ face, dir });
         }
 
-        // Execute moves sequentially
         let i = 0;
         const executeNext = () => {
             if (i >= moves.length) return;
             
             const move = moves[i++];
             this.rotateFace(move.face, move.dir, 0.15);
-            
-            // Wait for animation then next
-            setTimeout(executeNext, 200);
+            setTimeout(executeNext, 250);
         };
         
         executeNext();
     }
 
-    // Solve: reset to solved state (instant for now)
+    // Solve: reset to solved state
     solve() {
         if (this.isAnimating) return;
         
-        // Remove all cubies and recreate
+        // Remove all cubies
         this.cubies.forEach(cubie => {
             this.group.remove(cubie);
             cubie.geometry.dispose();
             cubie.material.forEach(m => m.dispose());
         });
         this.cubies = [];
+        this.moveHistory = [];
         
-        // Reset group rotation
+        // Reset group rotation with animation
         gsap.to(this.group.rotation, {
             x: 0, y: 0, z: 0,
             duration: 0.5
         });
         
+        // Recreate solved cube
         this.createCube();
+    }
+
+    // Get current state as string (for save/share)
+    getState() {
+        return this.moveHistory.map(m => m.face + (m.dir === -1 ? "'" : "")).join(' ');
     }
 }
